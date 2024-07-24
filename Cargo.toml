@@ -1,7 +1,7 @@
 [package]
 name = "rdocker"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 license = "MIT"
 description = "A api lib for docker in rust"
 homepage = "https://github.com/fb0sh/rdocker"
