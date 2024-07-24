@@ -1,7 +1,14 @@
 [package]
 name = "rdocker"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+license = "MIT"
+description = "A api lib for docker in rust"
+homepage = "https://github.com/fb0sh/rdocker"
+repository = "https://github.com/fb0sh/rdocker"
+documentation = "https://github.com/fb0sh/rdocker"
+readme = "README.md"
+authors = ["fb0sh@outlook.com"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
