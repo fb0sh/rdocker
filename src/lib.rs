@@ -40,7 +40,7 @@ impl Display for DockerResult {
 }
 
 impl DockerResult {
-    pub(self) fn new(docker: &mut Docker, api_end: &str) -> Self {
+    pub(self) fn get(docker: &mut Docker, api_end: &str) -> Self {
         // send
         let req = format!("GET /v{}{} HTTP/1.1\r\nHost: localhost\r\nUser-Agent: curl/8.8.0\r\nAccept: */*\r\n\r\n", docker.api_version, api_end);
         docker.stream.write_all(req.as_bytes()).unwrap();
@@ -79,6 +79,10 @@ impl DockerResult {
             data: serde_json::from_str(&res),
         }
     }
+    pub(self) fn post(docker: &mut Docker, api_end: &str, bodt: &str) -> Self {
+        // Self {}
+        todo!()
+    }
     pub fn status_code(&self) -> i32 {
         self.headers["status_code"].parse::<i32>().unwrap()
     }
@@ -94,7 +98,7 @@ impl Docker {
             stream: stream,
         };
 
-        let dr = DockerResult::new(&mut docker, "/version");
+        let dr = DockerResult::get(&mut docker, "/version");
         let data = dr.data?;
         docker.version = data["Version"].to_string().replace("\"", "");
         docker.api_version = data["ApiVersion"].to_string().replace("\"", "");
@@ -102,8 +106,8 @@ impl Docker {
 
         Ok(docker)
     }
-    pub fn access(&mut self, api_end: &str) -> DockerResult {
-        DockerResult::new(self, api_end)
+    pub fn get(&mut self, api_end: &str) -> DockerResult {
+        DockerResult::get(self, api_end)
     }
 }
 
@@ -113,7 +117,7 @@ mod tests {
     #[test]
     fn test_new() {
         let mut d = Docker::new().unwrap();
-        let dr = d.access("/version");
+        let dr = d.get("/version");
         println!("{dr}");
         println!("{}", dr.status_code());
     }
