@@ -34,18 +34,15 @@ impl Display for DockerResult {
         for (k, v) in &self.headers {
             header += &format!("{k}: {v}\n");
         }
-        let data = self.data.as_ref().unwrap();
-        write!(f, "{header}\n{data}",)
+        let data = self.data.as_ref();
+        write!(f, "{header}\n{:?}", data)
     }
 }
 
 impl DockerResult {
-    pub(self) fn get(docker: &mut Docker, api_end: &str) -> Self {
-        // send
-        let req = format!("GET /v{}{} HTTP/1.1\r\nHost: localhost\r\nUser-Agent: curl/8.8.0\r\nAccept: */*\r\n\r\n", docker.api_version, api_end);
-        docker.stream.write_all(req.as_bytes()).unwrap();
+    fn parse(stream: &mut UnixStream) -> (HashMap<String, String>, String) {
         // recv
-        let mut bf = BufReader::new(&mut docker.stream);
+        let mut bf = BufReader::new(stream);
         let mut headers = HashMap::new();
 
         // for http first line
@@ -54,7 +51,12 @@ impl DockerResult {
         let head = first_line.split(" ").collect::<Vec<&str>>();
         headers.insert("http_version".to_string(), head[0].to_string());
         headers.insert("status_code".to_string(), head[1].to_string());
-        headers.insert("status".to_string(), head[2].to_string());
+        let mut status = String::new();
+        for i in 2..head.len() {
+            status += head[i];
+            status += " ";
+        }
+        headers.insert("status".to_string(), status.trim_end().to_string());
 
         loop {
             let mut line = String::new();
@@ -72,17 +74,35 @@ impl DockerResult {
         }
 
         let mut res = String::new();
-        let _size = bf.read_line(&mut res).unwrap();
+        if let Some(content_length) = headers.get("Content-Length") {
+            if content_length != "0" {
+                let _size = bf.read_line(&mut res).unwrap();
+            }
+        }
+
+        (headers, res)
+    }
+
+    fn request(docker: &mut Docker, method: &str, api_end: &str, body: &str) -> Self {
+        let req = format!(
+            "{} /v{}{} HTTP/1.1\r\nHost: localhost\r\nAccept: */*\r\n\r\n",
+            method, docker.api_version, api_end
+        );
+
+        docker.stream.write_all(req.as_bytes()).unwrap();
+
+        if body.len() != 0 {
+            docker.stream.write_all(body.as_bytes()).unwrap();
+        }
+
+        let (headers, res) = DockerResult::parse(&mut docker.stream);
 
         Self {
             headers: headers,
             data: serde_json::from_str(&res),
         }
     }
-    pub(self) fn post(docker: &mut Docker, api_end: &str, bodt: &str) -> Self {
-        // Self {}
-        todo!()
-    }
+
     pub fn status_code(&self) -> i32 {
         self.headers["status_code"].parse::<i32>().unwrap()
     }
@@ -98,7 +118,7 @@ impl Docker {
             stream: stream,
         };
 
-        let dr = DockerResult::get(&mut docker, "/version");
+        let dr = docker.get("/version");
         let data = dr.data?;
         docker.version = data["Version"].to_string().replace("\"", "");
         docker.api_version = data["ApiVersion"].to_string().replace("\"", "");
@@ -106,8 +126,21 @@ impl Docker {
 
         Ok(docker)
     }
+
+    pub fn head(&mut self, api_end: &str) -> DockerResult {
+        DockerResult::request(self, "HEAD", api_end, "")
+    }
     pub fn get(&mut self, api_end: &str) -> DockerResult {
-        DockerResult::get(self, api_end)
+        DockerResult::request(self, "GET", api_end, "")
+    }
+    pub fn post(&mut self, api_end: &str, body: &str) -> DockerResult {
+        DockerResult::request(self, "POST", api_end, body)
+    }
+    pub fn put(&mut self, api_end: &str, body: &str) -> DockerResult {
+        DockerResult::request(self, "PUT", api_end, body)
+    }
+    pub fn delete(&mut self, api_end: &str, body: &str) -> DockerResult {
+        DockerResult::request(self, "DELETE", api_end, body)
     }
 }
 
@@ -117,8 +150,7 @@ mod tests {
     #[test]
     fn test_new() {
         let mut d = Docker::new().unwrap();
-        let dr = d.get("/version");
-        println!("{dr}");
-        println!("{}", dr.status_code());
+        let p = d.head("/_ping");
+        println!("{}", p.status_code());
     }
 }
